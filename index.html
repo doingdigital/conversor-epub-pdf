@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversor de EPUB para PDF</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .progress-bar {
+            height: 8px;
+            background-color: #e5e7eb;
+            border-radius: 9999px;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #3b82f6;
+            transition: width 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4 sm:p-6 md:p-8">
+    <div class="w-full max-w-2xl bg-white p-6 sm:p-8 rounded-2xl shadow-xl border border-gray-200">
+        <!-- Título e Descrição -->
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Conversor de EPUB para PDF</h1>
+            <p class="text-gray-600">Carregue até 100 ficheiros EPUB (máx. 300MB cada) para converter em PDF.</p>
+        </div>
+
+        <!-- Área de Upload -->
+        <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-6 text-center transition-colors hover:border-blue-500">
+            <input type="file" id="file-upload" multiple accept=".epub" class="hidden" />
+            <label for="file-upload" class="cursor-pointer">
+                <div class="flex flex-col items-center justify-center">
+                    <svg class="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-4-4v-1a4 4 0 014-4h10a4 4 0 014 4v1a4 4 0 01-4 4H7zM12 8v4m0 0v4m0-4h4m-4 0H8"></path>
+                    </svg>
+                    <p class="text-gray-500 font-medium">Arraste e solte ficheiros aqui ou <span class="text-blue-600 font-semibold hover:underline">clique para selecionar</span></p>
+                </div>
+            </label>
+        </div>
+
+        <!-- Mensagens de Feedback -->
+        <div id="message-container" class="mb-4"></div>
+
+        <!-- Lista de Ficheiros Carregados -->
+        <div id="file-list" class="space-y-4"></div>
+
+        <!-- Botão de Ação -->
+        <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-6">
+            <button id="convert-button" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-xl shadow-md transition-transform transform hover:scale-105 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 disabled:bg-gray-400 disabled:cursor-not-allowed">
+                Converter Ficheiros
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-upload');
+        const fileListContainer = document.getElementById('file-list');
+        const convertButton = document.getElementById('convert-button');
+        const messageContainer = document.getElementById('message-container');
+
+        const MAX_FILES = 100;
+        const MAX_FILE_SIZE_MB = 300;
+        const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+        let filesToConvert = [];
+
+        function showMessage(text, type = 'info') {
+            const message = document.createElement('div');
+            message.textContent = text;
+            message.className = `p-3 rounded-xl mb-4 text-sm font-medium ${
+                type === 'success' ? 'bg-green-100 text-green-700' :
+                type === 'error' ? 'bg-red-100 text-red-700' :
+                'bg-blue-100 text-blue-700'
+            }`;
+            messageContainer.innerHTML = '';
+            messageContainer.appendChild(message);
+        }
+
+        function renderFileList() {
+            fileListContainer.innerHTML = '';
+            if (filesToConvert.length === 0) {
+                return;
+            }
+
+            filesToConvert.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex items-center space-x-4 bg-gray-100 p-4 rounded-xl';
+                fileItem.innerHTML = `
+                    <div class="flex-shrink-0 text-gray-500">
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" />
+                            <path d="M14 3v4a2 2 0 002 2h4l-6-6z" fill="#fff" opacity="0.5" />
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-semibold text-gray-800 truncate">${file.name}</span>
+                            <span class="text-xs text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        </div>
+                        <div class="mt-1 progress-bar">
+                            <div id="progress-${index}" class="progress w-0"></div>
+                        </div>
+                    </div>
+                `;
+                fileListContainer.appendChild(fileItem);
+            });
+            convertButton.disabled = filesToConvert.length === 0;
+        }
+
+        function validateFiles(files) {
+            let validFiles = [];
+            let errorMessages = [];
+
+            if (files.length > MAX_FILES) {
+                errorMessages.push(`Limite de ficheiros excedido. Máximo de ${MAX_FILES} ficheiros.`);
+                files = Array.from(files).slice(0, MAX_FILES);
+            }
+
+            for (const file of files) {
+                if (file.type !== 'application/epub+zip' && !file.name.toLowerCase().endsWith('.epub')) {
+                    errorMessages.push(`O ficheiro "${file.name}" não é um ficheiro EPUB válido.`);
+                    continue;
+                }
+                if (file.size > MAX_FILE_SIZE_BYTES) {
+                    errorMessages.push(`O ficheiro "${file.name}" excede o limite de tamanho de ${MAX_FILE_SIZE_MB} MB.`);
+                    continue;
+                }
+                validFiles.push(file);
+            }
+
+            if (errorMessages.length > 0) {
+                showMessage(errorMessages.join(' '), 'error');
+            } else if (validFiles.length > 0) {
+                showMessage(`Foram carregados ${validFiles.length} ficheiros válidos.`, 'info');
+            }
+
+            return validFiles;
+        }
+
+        fileInput.addEventListener('change', (event) => {
+            const files = event.target.files;
+            if (files.length > 0) {
+                filesToConvert = validateFiles(files);
+                renderFileList();
+            }
+        });
+
+        async function convertAndDownloadFile(file, index) {
+            const progressBar = document.getElementById(`progress-${index}`);
+            progressBar.style.width = '20%';
+
+            const formData = new FormData();
+            formData.append('epubFile', file);
+
+            try {
+                const response = await fetch('http://localhost:3000/convert', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                progressBar.style.width = '60%';
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    progressBar.style.width = '100%';
+                    
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name.replace('.epub', '.pdf');
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                    return { success: true };
+                } else {
+                    const errorText = await response.text();
+                    return { success: false, message: errorText || 'Erro desconhecido na conversão' };
+                }
+            } catch (error) {
+                console.error('Erro de rede ou de servidor:', error);
+                return { success: false, message: 'Erro de rede ou de servidor' };
+            }
+        }
+
+        convertButton.addEventListener('click', async () => {
+            if (filesToConvert.length === 0) return;
+            convertButton.disabled = true;
+            showMessage('A iniciar a conversão... Por favor, não feche o navegador.', 'info');
+
+            let successfulConversions = 0;
+            for (let i = 0; i < filesToConvert.length; i++) {
+                const file = filesToConvert[i];
+                const result = await convertAndDownloadFile(file, i);
+                if (result.success) {
+                    successfulConversions++;
+                    showMessage(`Conversão e download do ficheiro ${file.name} concluídos.`, 'success');
+                } else {
+                    showMessage(`Falha na conversão do ficheiro ${file.name}: ${result.message}`, 'error');
+                }
+            }
+            
+            showMessage(`Conversão de ${successfulConversions} de ${filesToConvert.length} ficheiros concluída.`, 'success');
+            filesToConvert = [];
+            fileInput.value = '';
+            renderFileList();
+            convertButton.disabled = false;
+        });
+
+        // Estado inicial dos botões
+        convertButton.disabled = true;
+    </script>
+</body>
+</html>
