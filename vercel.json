@@ -1,4 +1,3 @@
-    {
-      "installCommand": "npm install && sudo apt-get update && sudo apt-get install -y pandoc librsvg2-bin texlive-xetex texlive-latex-extra"
-    }
-    
+{
+  "installCommand": "npm install && sudo apt-get update && sudo apt-get install -y pandoc librsvg2-bin texlive-xetex texlive-latex-extra"
+}
