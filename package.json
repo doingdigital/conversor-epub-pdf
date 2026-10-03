@@ -1,14 +1,17 @@
 {
   "name": "conversorebook",
   "version": "1.0.0",
-  "description": "",
+  "description": "Conversor de EPUB para PDF (Express e pandoc)",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test test/*.test.js",
     "start": "node server.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "doing digital",
   "license": "ISC",
   "dependencies": {
     "connect-timeout": "^1.9.1",
