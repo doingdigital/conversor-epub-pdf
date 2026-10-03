@@ -33,7 +33,7 @@
         </div>
 
         <!-- Área de Upload -->
-        <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-6 text-center transition-colors hover:border-blue-500">
+        <div id="drop-zone" class="border-2 border-dashed border-gray-300 rounded-xl p-6 mb-6 text-center transition-colors hover:border-blue-500">
             <input type="file" id="file-upload" multiple accept=".epub" class="hidden" />
             <label for="file-upload" class="cursor-pointer">
                 <div class="flex flex-col items-center justify-center">
@@ -70,7 +70,7 @@
         const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
         let filesToConvert = [];
 
-        function showMessage(text, type = 'info') {
+        function showMessage(text, type = 'info', append = false) {
             const message = document.createElement('div');
             message.textContent = text;
             message.className = `p-3 rounded-xl mb-4 text-sm font-medium ${
@@ -78,12 +78,14 @@
                 type === 'error' ? 'bg-red-100 text-red-700' :
                 'bg-blue-100 text-blue-700'
             }`;
-            messageContainer.innerHTML = '';
+            if (!append) {
+                messageContainer.replaceChildren();
+            }
             messageContainer.appendChild(message);
         }
 
         function renderFileList() {
-            fileListContainer.innerHTML = '';
+            fileListContainer.replaceChildren();
             if (filesToConvert.length === 0) {
                 return;
             }
@@ -100,7 +102,7 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between">
-                            <span class="text-sm font-semibold text-gray-800 truncate">${file.name}</span>
+                            <span class="file-name text-sm font-semibold text-gray-800 truncate"></span>
                             <span class="text-xs text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
                         </div>
                         <div class="mt-1 progress-bar">
@@ -108,6 +110,7 @@
                         </div>
                     </div>
                 `;
+                fileItem.querySelector('.file-name').textContent = file.name;
                 fileListContainer.appendChild(fileItem);
             });
             convertButton.disabled = filesToConvert.length === 0;
@@ -143,13 +146,33 @@
             return validFiles;
         }
 
-        fileInput.addEventListener('change', (event) => {
-            const files = event.target.files;
-            if (files.length > 0) {
-                filesToConvert = validateFiles(files);
-                renderFileList();
+        function addFiles(files) {
+            if (files.length === 0) return;
+            const room = MAX_FILES - filesToConvert.length;
+            const valid = validateFiles(files);
+            if (valid.length > room) {
+                showMessage(`Limite de ficheiros excedido. Máximo de ${MAX_FILES} ficheiros.`, 'error');
             }
+            filesToConvert = filesToConvert.concat(valid.slice(0, Math.max(room, 0)));
+            renderFileList();
+        }
+
+        fileInput.addEventListener('change', (event) => {
+            addFiles(event.target.files);
+            fileInput.value = '';
         });
+
+        const dropZone = document.getElementById('drop-zone');
+        dropZone.addEventListener('dragover', (event) => {
+            event.preventDefault();
+        });
+        dropZone.addEventListener('drop', (event) => {
+            event.preventDefault();
+            addFiles(event.dataTransfer.files);
+        });
+        // Evita que o navegador abra um ficheiro largado fora da zona.
+        window.addEventListener('dragover', (event) => event.preventDefault());
+        window.addEventListener('drop', (event) => event.preventDefault());
 
         async function convertAndDownloadFile(file, index) {
             const progressBar = document.getElementById(`progress-${index}`);
@@ -159,7 +182,7 @@
             formData.append('epubFile', file);
 
             try {
-                const response = await fetch('http://localhost:3000/convert', {
+                const response = await fetch('/convert', {
                     method: 'POST',
                     body: formData,
                 });
@@ -173,7 +196,7 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = file.name.replace('.epub', '.pdf');
+                    a.download = file.name.replace(/\.epub$/i, '.pdf');
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -193,6 +216,7 @@
             if (filesToConvert.length === 0) return;
             convertButton.disabled = true;
             showMessage('A iniciar a conversão... Por favor, não feche o navegador.', 'info');
+            const total = filesToConvert.length;
 
             let successfulConversions = 0;
             for (let i = 0; i < filesToConvert.length; i++) {
@@ -200,13 +224,13 @@
                 const result = await convertAndDownloadFile(file, i);
                 if (result.success) {
                     successfulConversions++;
-                    showMessage(`Conversão e download do ficheiro ${file.name} concluídos.`, 'success');
+                    showMessage(`Conversão e download do ficheiro ${file.name} concluídos.`, 'success', true);
                 } else {
-                    showMessage(`Falha na conversão do ficheiro ${file.name}: ${result.message}`, 'error');
+                    showMessage(`Falha na conversão do ficheiro ${file.name}: ${result.message}`, 'error', true);
                 }
             }
             
-            showMessage(`Conversão de ${successfulConversions} de ${filesToConvert.length} ficheiros concluída.`, 'success');
+            showMessage(`Convertidos ${successfulConversions} de ${total} ficheiros.`, successfulConversions === 0 ? 'error' : successfulConversions === total ? 'success' : 'info', true);
             filesToConvert = [];
             fileInput.value = '';
             renderFileList();
