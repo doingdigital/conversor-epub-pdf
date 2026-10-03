@@ -1,21 +1,6 @@
-    {
-      "functions": {
-        "api/convert.js": {
-          "runtime": "nodejs18.x"
-        }
-      },
-      "builds": [
-        {
-          "src": "server.js",
-          "use": "@vercel/node"
-        }
-      ],
-      "installCommand": "npm install && sudo apt-get update && sudo apt-get install -y pandoc librsvg2-bin texlive-xetex texlive-latex-extra",
-      "routes": [
-        {
-          "src": "/(.*)",
-          "dest": "/server.js"
-        }
-      ]
-    }
-    
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": false
+  }
+}
